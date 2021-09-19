@@ -1,0 +1,47 @@
+import requests
+import sqlite3
+from universal import *
+
+def basicDividends(cursor, token, base_url, vtype, symbol):
+    try:
+        tester = requests.get(base_url + version + "stock/" + symbol + "/dividends/ytd/?token=" + token)
+        json = tester.json()
+    except:
+        print("Request error for symbol " + symbol)
+        return False
+    cursor.execute('''INSERT INTO distribution VALUES(?,?,?,?,?,?,?,?)''', (json['symbol'],
+                 json['exDate'], json['recordDate'], json['paymentDate'], json['frequency'],
+                 json['amount'], json['declaredDate'], json['flag']))
+    return True
+
+
+
+def basicDividendsForSymbols(symbols):
+    completed = []
+    conn = sqlite3.connect('base.db')
+    cursor = conn.cursor()
+
+    cursor.execute("CREATE TABLE IF NOT EXISTS basicDividends (symbol text, exDate text, recordDate text, "
+                   "paymentDate text, frequency text, amount integer, declaredDate text,"
+                   "fromFactor text, toFactor text, taxRate integer, flag text)")
+    # if table does not exist, make it
+    for i in symbols:
+        success = False
+        cursor.execute("DELETE FROM dividends WHERE (symbol = ?)", (i,))
+        success = basicDividends(cursor, API_token, iex_base_url, version, i)  # adds new data
+        if success:
+            completed.append(i)
+            conn.commit()
+        else:
+            print("An error occurred for symbol " + i + ".  No changes were made to this row.")
+            conn.close()
+            conn = sqlite3.connect('base.db')
+            cursor = conn.cursor()
+    conn.close()
+    return "Completed Dividend data update for symbols " + str(completed)
+
+
+if __name__ == "__main__":
+    # execute only if run as a script
+    sampleSymbols = ["XOM", "AAPL", "AMZN", "NOT_A_SYMBOL"]
+    print(basicDividendsForSymbols(sampleSymbols))
